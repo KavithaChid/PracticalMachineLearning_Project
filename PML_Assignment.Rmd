@@ -1,0 +1,112 @@
+---
+title: " Predicting Accuracy Of Barbell Lifts Exercise Using Accelerometer Data "
+author: "Chidambaranathan Kavitha"
+date: "22 June 2017"
+output: html_document
+---
+##Executive Summary:
+Data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants are provided. They were asked to do the barbell lifts accurately and inaccurately in five different ways.
+The goal is to predict the manner in which the exercise was done. The "classe" variable is the outcome while all other variables can be used as predictors.
+
+## Data
+Separate sets of training and testing data were provided by  http://groupware.les.inf.puc-rio.br/har.
+
+Training data set can be downloaded from
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Testing data set can be downloaded from
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Data Analysis and Cleansing
+
+Initial viewing of the csv data brought a few facts to light immediately. 
+
+[, 1] Several columns had NA values for all the rows
+[, 2] There was a row identifier column with a sequential number as the first column.
+[, 3] A few more columns with  data such as name of participant, timestamp columns etc. that have no value as predictors.
+
+Load required libraries and read the csv data to memory
+
+```{r exploratory}
+library(readr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+library(randomForest)
+```
+```{r loaddata, echo = TRUE}
+training <- read.csv("C:/Users/chidakav/Downloads/pml-training.csv", sep=",", header=TRUE, na.strings = c("NA", "#DIV/0!"))
+testing <- read.csv("C:/Users/chidakav/Downloads/pml-testing.csv",sep=",", header=TRUE, na.strings = c("NA", "#DIV/0!")) 
+```
+Prepare the data to remove the NA columns, and the columns identified as not useful.
+
+```{r dataprep }
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+
+training <- training[, - c(1,2,3,4,5,6,7)]
+testing <- testing[, - c(1,2,3,4,5,6,7)]
+```
+We removed the first seven columns as they do not contribute as a predictor in any useful way.
+
+## Pre-process Data
+
+Pre-process the data with the center and scale methods. Set a seed value to ensure reproducibility.
+```{r preprocess }
+set.seed(12396)
+preProcValues <- preProcess(training, method = c("center", "scale"))
+
+Proctrain <- predict(preProcValues, training)
+Proctrain$classe <- training$classe
+
+Proctest <- predict(preProcValues, testing)
+```
+## Data Partition
+Partition the training set into a training and validation set.
+```{r partitiondata }
+inTrain <- createDataPartition(Proctrain$classe, p = 0.7, list = FALSE)
+Dttrain <- Proctrain[inTrain, ]
+Dtvalid <- Proctrain[-inTrain, ]
+
+dim(Dttrain)
+dim(Dtvalid)
+```
+## Prediction Models
+
+We can consider the Classification Tree and the RandomForest Analysis models to build a prediction model. The final selection will however be based on the accuracy returned by these models.
+
+```{r class_tree }
+
+modFit_class <- rpart(classe ~ ., data=Dttrain, method="class")
+fancyRpartPlot(modFit_class)
+```
+
+
+Let's predict this data against the validation set to check the accuracy level
+
+```{r class_pred }
+pred_class <- predict(modFit_class , Dtvalid, type = "class")
+conf_class <- confusionMatrix(Dtvalid$classe,pred_class ) 
+print(conf_class)
+```
+Only 71% accuracy is seen using the classification prediction model.
+
+Next trial is using the RandomForest which usually gives a better accuracy rate.
+
+```{r rf }
+modFit_rf <- randomForest(classe ~. , data=Dttrain)
+pred_rf <- predict(modFit_rf, Dtvalid, type = "class")
+conf_rf <- confusionMatrix(Dtvalid$classe,pred_rf )
+print(conf_rf) 
+```
+The results have a near accurate prediction rate of 99.5%. So the out-of-sample error is 0.5%.
+
+Using the RandomForest prediction model modFit_rf, we proceed to do the prediction of the untouched test data.
+
+##Predicted Results using RandomForest Model.
+
+```{r pred_testdata }
+predict(modFit_rf, Proctest, type = "class")
+```
